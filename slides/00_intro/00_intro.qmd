@@ -164,7 +164,7 @@ Check all preloaded datasets you can use in your active R session
 -   Open file to see first 7 lines are meta data
 
 ```{r}
-x = read.csv("~/../Downloads/construction_data.csv", 
+x = read.csv("../../data/construction_data.csv", 
                skip = 7)
 head(x)
 str(x)
