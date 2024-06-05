@@ -13,7 +13,7 @@ As you prepare for the course, please ensure you have the following ready:
 
 ### 1. Install R and RStudio
 
-- Download and install R from [CRAN](https://cran.r-project.org/).
+- Download and install R from [CRAN](https://cran.r-project.org/). R version >=4.1 is required.
 - Download and install RStudio from [RStudio's website](https://www.rstudio.com/products/rstudio/download/).
 
 ### 2. Install R Packages we will be using
@@ -25,7 +25,18 @@ install.packages(c("tidyverse", "lubridate", "tsbox", "seasonal"))
 
 ### 3. Set Up JDemetra+ in R
 
-Follow the instructions on the course GitHub page to get JDemetra+ running in R. Note that this requires some manual installation. Anna has provided installation guidelines on GitHub.
+Packages giving access to JDemetra+ version 3.2.2 (the one we will be using to work with high-frequency data) are not on CRAN yet. 
+They are available from [this page](https://github.com/rjdverse).
+
+Please note the Java 17 or higher is required to run them. How to get such a version of Java and link it to R is explained on, [this page of JDemetra+ documentation](https://jdemetra-new-documentation.netlify.app/#r-packages)
+
+Once java is set in your R, install the packages listed below following the instructions in the corresponding readme file.
+- rdj3toolkit
+- rjd3x13
+- rjd3tramoseats
+- rjd3stl
+- rjd3x11plus
+- rjd3highfreq
 
 ### 4. Optional Preparation Material
 
