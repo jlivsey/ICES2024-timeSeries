@@ -1,0 +1,335 @@
+---
+title: "2024 ICES - Short Course"
+subtitle: "SC03: Seasonal Adjustment and Time Series Analysis"
+author:
+  - name: James Livsey
+    affiliations:
+      - name: U.S. Census Bureau
+        address: james.a.livsey@census.gov
+  - name: Anna Smyk
+    affiliations:
+      - name: Insee, France
+        address: anna.smyk@insee.fr 
+format: revealjs
+editor: source
+toc: true
+toc-depth: 1
+slide-number: true
+smaller: false
+scrollable: true 
+execute:
+  echo: true
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r, echo=FALSE}
+library(forecast)
+library(fpp3)
+library(tidyverse)
+library(tsbox)
+library(zoo)
+library(seasonal)
+library(astsa)
+```
+
+# ---- Let's get started: The Basics
+
+ (Introductory Level)
+Location: Glasgow Caledonian University
+Date: Mon, Jun 17, 2024 Time: 1:30 PM - 5:30 PM BST
+Description
+This course aims to offer participants an introduction to time series seasonal adjustment. Its main objectives include introducing foundational concepts in time series, exploring the nuances of seasonal adjustment methodology, and providing hands-on experience implementing these techniques through the R programming language. The course is designed to be accessible to beginners seeking an introduction to seasonal adjustment while also catering to experienced practitioners aiming to deepen their understanding of advanced time series techniques such as seasonal adjustment of high-frequency (infra-monthly) data. Prerequisites for the course: Introductory knowledge of statistical modelling
+
+## Time Series
+
+Time series data are measurements taken sequentially over time on a variable or variables of interest. Such data are very common and understanding the dynamic nature of time series data is of paramount interest in many fields, particularly for producing forecasts at future times.
+
+## Types of time series
+
+-   Economics and Finance: GDP, stock prices, exchange rates
+-   Official Statistics: Census data, annual survey data
+-   Engineering: Signal processing
+-   Business: Sales figures, production numbers, inventories
+-   Demographic data: Population sizes
+-   Natural Sciences: Astronomical data, seismic events
+-   Environment: Temperature, precipitation, particulate matter
+-   High frequency data: Medical imaging, wearables
+
+## Sampling Frequency
+
+| Data     | Minute | Hour | Day   | Week   | Year     |
+|----------|--------|------|-------|--------|----------|
+| Quarters |        |      |       |        | 4        |
+| Months   |        |      |       |        | 12       |
+| Weeks    |        |      |       |        | 52.18    |
+| Days     |        |      |       | 7      | 365.25   |
+| Hours    |        |      | 24    | 168    | 8766     |
+| Minutes  |        | 60   | 1440  | 10080  | 525960   |
+| Seconds  | 60     | 3600 | 86400 | 604800 | 31557600 |
+
+## Monthly time series
+
+```{r, echo = TRUE}
+plot(AirPassengers)
+```
+
+## half-hourly time series
+
+Half-hourly electricity demand in England and Wales from Monday 5 June 2000 to Sunday 27 August 2000.
+
+```{r, echo = TRUE}
+plot(forecast::taylor)
+```
+
+## Time Series Data in R
+
+A time series can be thought of as a list of numbers (the measurements), along with some information about what times those numbers were recorded (the index). This information can be stored as the following object in R:
+
+-   `ts`: Time Series class in base R
+-   `zoo`: Package for ordered indexed observations
+-   `xts`: Extensible Time Series class, an extension of `zoo`
+-   `tsibble`: Provides a data structure for time series data
+
+## Time Series packages in R
+
+We may utilize the following R packages for analysis:
+
+-   `ts`: Time Series class in base R
+-   `zoo`: Package for ordered indexed observations
+-   `xts`: Extensible Time Series class, an extension of `zoo`
+-   `tsibble`: Provides a data structure for time series data
+-   `timeDate`: Package for handling time and date
+-   `lubridate`: Package for working with dates and times
+-   `tibbletime`: Extension of `tibble` for time-based data
+-   `forecast`: Package for forecasting time series data
+-   `fpp3`: Forecasting Principles and Practice, the third edition
+-   `tidyverse`: A collection of packages for data manipulation and visualization in R
+-   `tsbox`: Provides a set of tools for handling time series in R
+
+## More comprehensive list here
+
+[https://cran.r-project.org/web/views/TimeSeries.html]()
+
+## First look at some data
+
+```{r, echo=TRUE}
+gafa_stock 
+class(gafa_stock)
+
+```
+
+## Filter to find the max
+
+```{r, echo=TRUE}
+gafa_stock %>%
+  group_by(Symbol) %>%
+  filter(Close == max(Close))
+```
+
+## make ggplot
+
+```{r, echo=TRUE}
+ggplot(gafa_stock, aes(x = Date, y = Close, color = Symbol)) +
+  geom_line()
+```
+
+## Facet wrap to see scale better
+
+```{r, echo=TRUE}
+gafa_stock |>
+  ggplot(aes(x=Date, y=Close, group=Symbol)) +
+  geom_line(aes(col=Symbol)) +
+  facet_grid(Symbol ~ ., scales='free')
+```
+
+# ---- Reading in Data
+
+## Preloaded data in R
+
+Check all preloaded datasets you can use in your active R session
+
+-   `data()`
+
+## Lets do an exercise in R
+
+1.  Google "census bureau time series"
+    -   select "Business and Industry: Time Series / Trend Chart"
+2.  Select Construction spending
+    -   click submit
+3.  Download .txt file via link at top of data table
+
+## Read into R
+
+-   Open file to see first 7 lines are meta data
+
+```{r}
+x = read.csv("~/../Downloads/construction_data.csv", 
+               skip = 7)
+head(x)
+str(x)
+```
+
+Notice the column `Period` is poorly named and not a date!
+
+# ---- Dealing with Dates
+
+## Lubridate
+
+[https://lubridate.tidyverse.org]()
+
+-   Easy and fast parsing of date-times: `ymd()`, `ymd_hms`, `dmy()`, `dmy_hms`, `mdy()`
+
+```{r}
+"Jan-2020"
+"Jan-2020" |> class()
+d = lubridate::my("Jan-2020")
+lubridate::my("Jan-2020") |> class()
+```
+
+## Convert string dates to Date format
+
+```{r}
+dat <- x |>
+  rename(time = Period) |>
+  mutate(time = my(time))
+head(dat)
+str(dat)
+```
+
+## Date format
+
+-   Having a date column first now plays nice with the R time series packages
+
+```{r}
+ts_plot(dat)
+as_tsibble(dat) |> autoplot()
+```
+
+## Extracting Dates
+
+Lets try to look at a plot by month.
+
+```{r}
+dat |>
+  mutate(month = month(time)) |> # Add month column
+  filter(!is.na(Value)) |>
+  ggplot(aes(x=time, y=Value, group=month)) +
+  geom_line(aes(col=month)) +
+  facet_grid(month ~ ., scales='free')
+```
+
+## Extracting Dates
+
+The trend is obscuring information. A crude trend filter
+
+```{r}
+crude_trend = stats::filter(dat$Value, c(1/24, rep(1/12, 11), 1/24), sides = 2)
+dat |>
+  mutate(detrend  = Value - crude_trend) |>
+  mutate(month = month(time)) |> # Add month column
+  filter(!is.na(detrend)) |>
+  ggplot(aes(x=time, y=detrend, group=month)) +
+  geom_line(aes(col=month)) +
+  facet_grid(month ~ .)
+```
+
+## `seq()` function in R understands Date objects
+
+```{r}
+seq(from = as.Date("2020-01-01"), 
+    to = as.Date("2020-12-31"), 
+    by = "month")
+seq(from = as.Date("2020-01-01"), 
+    to = as.Date("2020-12-31"), 
+    by = "week")
+```
+
+# ---- Plotting
+
+## tsbox package
+
+-   I prefer to utilize the `tsbox`
+-   [https://docs.ropensci.org/tsbox/]()
+-   Built on a set of converters
+-   all functions start with `ts_`
+
+## tsbox package functionality
+
+```{r}
+#| output-location: slide
+ts_plot(
+  ts_scale(
+    ts_c(
+      mdeaths, 
+      austres, 
+      AirPassengers, 
+      DAX = EuStockMarkets[, 'DAX']
+      )
+    )
+ )
+```
+
+## ffp3 uses `autoplot`
+
+```{r}
+melsyd_economy <- ansett |>
+  filter(Airports == "MEL-SYD", Class == "Economy") |>
+  mutate(Passengers = Passengers/1000)
+autoplot(melsyd_economy, Passengers) +
+  labs(title = "Ansett airlines economy class",
+       subtitle = "Melbourne-Sydney",
+       y = "Passengers ('000)")
+```
+
+# ---- Exercies:
+
+## Exercises
+
+1.  Convert monthly time series to quarterly
+
+## Semester long activity
+
+-   Discuss weekly forecasting of Unemployment Insurance Weekly Claims Report
+-   [https://www.dol.gov/ui/data.pdf]()
+
+```{r, echo=FALSE}
+library(fredr)
+fredr_set_key("052142bc981666b4ebcb1c8df98d006b")
+```
+
+```{r}
+library(fredr)
+fredr_set_key("052142bc981666b4ebcb1c8df98d006b")
+
+icnsa = fredr(series_id = "ICNSA")
+
+icnsa |> 
+  select(time = date, value) |>
+  ts_dygraphs()
+```
+
+## Convert ICNSA series to Quarterly
+
+-   This is a nice application of `lubridate`
+
+```{r}
+#| output-location: slide
+icnsa |> 
+  mutate(quarter = quarter(date)) |>
+  mutate(year = year(date)) |>
+  group_by(year, quarter) |> 
+  summarise(n = sum(value)) |> 
+  ungroup() |>
+  mutate(date = paste(year, quarter, sep = "-")) |>
+  mutate(date = yq(date)) |>
+  select(date, n) |>
+  ts_plot()
+```
+
+## Check if the following processes are causal, invertible, and identifiable
+
+1.  $X_t = 0.4\sum_{j=1}^3 X_{t-j} + Z_t$
+2.  $X_t = 0.7X_{t-1} + Z_t + 0.6Z_{t-1} - 0.8Z_{t-2}$
+3.  $X_t = X_{t-1} - 0.24X_{t-2} + Z_{t-1} - 0.4Z_{t-1}$
+4.  $X_t = X_{t -12} + Z_{t} - Z_{t-1}$
