@@ -1,5 +1,4 @@
 
-*.html
 /local-only
 *.DS_Store
 /slides/part1/ices2024-timeSeries_files
