@@ -179,6 +179,7 @@ m = seas(AirPassengers)
 summary(m)
 final(m)
 out(m)
+view(m)
 ```
 
 
