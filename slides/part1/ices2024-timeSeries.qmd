@@ -954,10 +954,16 @@ As $\phi$ goes from 0 to 1 the series looks smoother.
 
 We can look at this for a fixed sequence of $\{ w_t \}$.
 
-## 
+##
 
 ```{r}
 w = rnorm(300)
+plot.ts(w)
+```
+
+## 
+
+```{r}
 x = arima.sim(model = list(ar = .2), n = 300, innov = w)
 plot(x)
 ```
