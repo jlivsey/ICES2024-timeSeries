@@ -1,0 +1,1677 @@
+---
+title: "2024 ICES - Short Course"
+subtitle: "SC03: Seasonal Adjustment and Time Series Analysis"
+author:
+  - name: James Livsey
+    affiliations:
+      - name: U.S. Census Bureau
+        address: james.a.livsey@census.gov
+  - name: Anna Smyk
+    affiliations:
+      - name: Insee, France
+        address: anna.smyk@insee.fr 
+format: revealjs
+editor: source
+toc: false
+toc-depth: 1
+slide-number: true
+smaller: false
+scrollable: true 
+execute:
+  echo: true
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r, echo=FALSE}
+library(forecast)
+library(fpp3)
+library(tidyverse)
+library(tsbox)
+library(zoo)
+library(seasonal)
+library(astsa)
+library(patchwork)
+library(tseries)
+```
+
+## 
+
+__Level__: Introductory Level
+
+__Location__: Glasgow Caledonian University
+
+__Date__: Mon, Jun 17, 2024 Time: 1:30 PM - 5:30 PM BST
+
+__Description__:
+This course aims to offer participants an introduction to time series and seasonal adjustment.
+
+__Main objectives__: 
+
+ - introducing foundational concepts in time series
+
+ - exploring seasonal adjustment methodology
+
+ - providing hands-on experience implementing these techniques in R 
+
+# Let's get started: The Basics
+
+## Time Series
+
+Time series data are measurements taken sequentially over time on a variable or variables of interest. Such data are very common and understanding the dynamic nature of time series data is of paramount interest in many fields, particularly for producing forecasts at future times.
+
+## Types of time series
+
+-   Economics and Finance: GDP, stock prices, exchange rates
+-   Official Statistics: Census data, annual survey data
+-   Engineering: Signal processing
+-   Business: Sales figures, production numbers, inventories
+-   Demographic data: Population sizes
+-   Natural Sciences: Astronomical data, seismic events
+-   Environment: Temperature, precipitation, particulate matter
+-   High frequency data: Medical imaging, wearables
+
+## Sampling Frequency
+
+| Data     | Minute | Hour | Day   | Week   | Year     |
+|----------|--------|------|-------|--------|----------|
+| Quarters |        |      |       |        | 4        |
+| Months   |        |      |       |        | 12       |
+| Weeks    |        |      |       |        | 52.18    |
+| Days     |        |      |       | 7      | 365.25   |
+| Hours    |        |      | 24    | 168    | 8766     |
+| Minutes  |        | 60   | 1440  | 10080  | 525960   |
+| Seconds  | 60     | 3600 | 86400 | 604800 | 31557600 |
+
+## Quarterly time series
+
+```{r, echo=FALSE}
+global_economy |>
+  filter(Country == "United States") |>
+  autoplot(GDP) +
+  labs(title= "United States GDP", y = "$US")
+```
+
+## Quarterly time series
+
+```{r}
+plot(JohnsonJohnson)
+```
+
+
+## Monthly time series
+
+```{r, echo = TRUE}
+plot(AirPassengers)
+```
+
+## half-hourly time series
+
+Half-hourly electricity demand in England and Wales from Monday 5 June 2000 to Sunday 27 August 2000.
+
+```{r, echo = TRUE}
+plot(forecast::taylor)
+```
+
+## Time Series Data in R
+
+A time series can be thought of as a list of numbers (the measurements), along with some information about what times those numbers were recorded (the index). This information can be stored as the following object in R:
+
+-   `ts`: Time Series class in base R
+-   `zoo`: Package for ordered indexed observations
+-   `xts`: Extensible Time Series class, an extension of `zoo`
+-   `tsibble`: Provides a data structure for time series data
+
+## Time Series packages in R
+
+We may utilize the following R packages for analysis:
+
+-   `ts`: Time Series class in base R
+-   `zoo`: Package for ordered indexed observations
+-   `xts`: Extensible Time Series class, an extension of `zoo`
+-   `tsibble`: Provides a data structure for time series data
+-   `timeDate`: Package for handling time and date
+-   `lubridate`: Package for working with dates and times
+-   `tibbletime`: Extension of `tibble` for time-based data
+-   `forecast`: Package for forecasting time series data
+-   `fpp3`: Forecasting Principles and Practice, the third edition
+-   `tidyverse`: A collection of packages for data manipulation and visualization in R
+-   `tsbox`: Provides a set of tools for handling time series in R
+
+## More comprehensive list here
+
+[https://cran.r-project.org/web/views/TimeSeries.html]()
+
+## First look at some data
+
+```{r, echo=TRUE}
+gafa_stock 
+class(gafa_stock)
+
+```
+
+## make ggplot
+
+```{r, echo=TRUE}
+ggplot(gafa_stock, aes(x = Date, y = Close, color = Symbol)) +
+  geom_line()
+```
+
+## Facet wrap to see scale better
+
+```{r, echo=TRUE}
+gafa_stock |>
+  ggplot(aes(x=Date, y=Close, group=Symbol)) +
+  geom_line(aes(col=Symbol)) +
+  facet_grid(Symbol ~ ., scales='free')
+```
+
+## First part of course goals 
+
+- The goal of this course is to understand time series and SA
+
+- Someone performs the following, what does this all mean?
+
+- Run in the R console and discuss
+
+```{r, eval=FALSE}
+m = seas(AirPassengers)
+summary(m)
+final(m)
+out(m)
+```
+
+
+
+# Reading in Data
+
+## Preloaded data in R
+
+Check all preloaded datasets you can use in your active R session
+
+-   `data()`
+
+## Lets do an exercise in R
+
+1.  Google "census bureau time series"
+    -   select "Business and Industry: Time Series / Trend Chart"
+2.  Select Construction spending
+    -   click submit
+3.  Download .txt file via link at top of data table
+
+## Read into R
+
+-   Open file to see first 7 lines are meta data
+
+```{r}
+x = read.csv("../../data/construction_data.csv", 
+               skip = 7)
+head(x)
+str(x)
+```
+
+Notice the column `Period` is poorly named and not a date!
+
+#  Dealing with Dates
+
+## Lubridate
+
+[https://lubridate.tidyverse.org]()
+
+-   Easy and fast parsing of date-times: `ymd()`, `ymd_hms`, `dmy()`, `dmy_hms`, `mdy()`
+
+```{r}
+"Jan-2020"
+"Jan-2020" |> class()
+d = lubridate::my("Jan-2020")
+lubridate::my("Jan-2020") |> class()
+```
+
+## Get and Set components 
+
+- Use `year()`, `month()`, `mday()`, `hour()`, `minute()` and `second()` to extract or set a component
+
+```{r}
+bday <- dmy("14/10/1979")
+month(bday)
+wday(bday, label = TRUE)
+
+year(bday) <- 2016
+wday(bday, label = TRUE)
+```
+
+
+## Convert string dates to Date format
+
+```{r}
+dat <- x |>
+  rename(time = Period) |>
+  mutate(time = my(time))
+head(dat)
+str(dat)
+```
+
+## Date format
+
+-   Having a date column first now plays nice with the R time series packages
+
+```{r}
+ts_plot(dat)
+as_tsibble(dat) |> autoplot()
+```
+
+## Extracting Dates
+
+Lets try to look at a plot by month.
+
+```{r}
+dat |>
+  mutate(month = month(time)) |> # Add month column
+  filter(!is.na(Value)) |>
+  ggplot(aes(x=time, y=Value, group=month)) +
+  geom_line(aes(col=month)) +
+  facet_grid(month ~ ., scales='free')
+```
+
+## `seq()` function in R understands Date objects
+
+```{r}
+seq(from = as.Date("2020-01-01"), 
+    to = as.Date("2020-12-31"), 
+    by = "month")
+seq(from = as.Date("2020-01-01"), 
+    to = as.Date("2020-12-31"), 
+    by = "week")
+```
+
+## `zoo` or `tsibble` time series
+
+- Another option for irregularly spaced or high frequency
+- They allow date object to be bound to observation
+
+```{r}
+ts_tsibble(AirPassengers)
+```
+
+
+# Plotting
+
+## tsbox package
+
+-   I prefer to utilize the `tsbox`
+-   [https://docs.ropensci.org/tsbox/]()
+-   Built on a set of converters
+-   all functions start with `ts_`
+
+## tsbox package functionality
+
+```{r}
+#| output-location: slide
+ts_plot(
+  ts_scale(
+    ts_c(
+      mdeaths, 
+      austres, 
+      AirPassengers, 
+      DAX = EuStockMarkets[, 'DAX']
+      )
+    )
+ )
+```
+
+## ffp3 uses `autoplot`
+
+```{r}
+melsyd_economy <- ansett |>
+  filter(Airports == "MEL-SYD", Class == "Economy") |>
+  mutate(Passengers = Passengers/1000)
+autoplot(melsyd_economy, Passengers) +
+  labs(title = "Ansett airlines economy class",
+       subtitle = "Melbourne-Sydney",
+       y = "Passengers ('000)")
+```
+
+## Exercise
+
+- Convert monthly time series to quarterly
+
+- U.S. Unemployment Insurance Weekly Claims
+
+- Download data from the FRED.
+
+## Weekly claims data
+
+-   Unemployment Insurance Weekly Claims Report
+-   [https://www.dol.gov/ui/data.pdf]()
+
+```{r, echo=FALSE}
+library(fredr)
+fredr_set_key("052142bc981666b4ebcb1c8df98d006b")
+```
+
+```{r}
+library(fredr)
+fredr_set_key("052142bc981666b4ebcb1c8df98d006b")
+
+icnsa = fredr(series_id = "ICNSA")
+
+icnsa |> 
+  select(time = date, value) |>
+  ts_dygraphs()
+```
+
+## Convert ICNSA series to Quarterly
+
+-   This is a nice application of `lubridate`
+
+```{r}
+#| output-location: slide
+icnsa |> 
+  mutate(quarter = quarter(date)) |>
+  mutate(year = year(date)) |>
+  group_by(year, quarter) |> 
+  summarise(n = sum(value)) |> 
+  ungroup() |>
+  mutate(date = paste(year, quarter, sep = "-")) |>
+  mutate(date = yq(date)) |>
+  select(date, n) |>
+  ts_plot()
+```
+
+# Transformations before analysis
+
+## Types of We consider
+
+-   Calendar adjustments
+-   Population adjustments
+-   Inflation adjustments
+-   Mathematical transformations
+
+## Calendar Adjustment
+
+Some of the variation seen in seasonal data may be due to simple calendar effects.
+
+<img src="Jan-2024.jpeg" style="width:500px;"/> <img src="Jan-2027.jpeg" style="width:500px;"/>
+
+## Trading Day Adjustment
+
+```{r}
+m = seas(AirPassengers, regression.variables = "td")
+summary(m)
+```
+
+## Population Adjustments
+
+Any data that are affected by population changes can be adjusted to give per-capita data.
+
+```{r}
+global_economy |>
+  filter(Country == "Turkey") |>
+  mutate(gdp_per_capita = GDP/Population) |>
+  ggplot(aes(x = Year, y = gdp_per_capita)) + 
+  geom_line() + 
+  labs(title= "GDP per capita", ylab = "$US")
+```
+
+## Inflation Adjustment
+
+-   Data which are affected by the value of money are best adjusted before modelling.
+
+-   For example, the average cost of a new house will have increased over the last few decades due to inflation. A \$200,000 house this year is not the same as a \$200,000 house twenty years ago.
+
+-   For this reason, financial time series are usually adjusted so that all values are stated in dollar values from a particular year.
+
+    -   For example, the house price data may be stated in year 2000 dollars.
+
+## Inflation Adjustment
+
+-   To make these adjustments, a price index is used.
+-   If $z_t$ denotes the price index and $y_t$ denotes the original house price in year $t$
+-   Then $x_t = \frac{y_t}{z_t} \times z_{2000}$ gives the adjusted house price at year 2000 dollar values.
+-   Price indexes are often constructed by government agencies.
+    -   For consumer goods, a common price index is the Consumer Price Index (or CPI).
+
+## Inflation Adjustment Example
+
+```{r}
+#| output-location: slide
+print_retail <- aus_retail |>
+  filter(Industry == "Newspaper and book retailing") |>
+  group_by(Industry) |>
+  index_by(Year = year(Month)) |>
+  summarise(Turnover = sum(Turnover))
+
+aus_economy <- global_economy |>
+  filter(Code == "AUS")
+
+print_retail |>
+  left_join(aus_economy, by = "Year") |>
+  mutate(Adjusted_turnover = Turnover / CPI * 100) |>
+  pivot_longer(c(Turnover, Adjusted_turnover),
+               values_to = "Turnover") |>
+  mutate(name = factor(name,
+         levels=c("Turnover","Adjusted_turnover"))) |>
+  ggplot(aes(x = Year, y = Turnover)) +
+  geom_line() +
+  facet_grid(name ~ ., scales = "free_y") +
+  labs(title = "Turnover: Australian print media industry",
+       y = "$AU")
+```
+
+## Mathematical transformations
+
+-   The most common mathematical transfomation is `log`
+-   A few versions of logarithmic transformation are given here
+
+```{r, eval=FALSE, echo=TRUE}
+log(x)
+log1p(x)
+log10(x)
+sign(x) * log(abs(x))
+```
+
+## 
+
+:::: {.columns}
+
+::: {.column width="50%"}
+
+```{r}
+plot(AirPassengers)
+```
+
+:::
+
+::: {.column width="50%"}
+
+```{r}
+plot(log(AirPassengers))
+```
+
+:::
+
+::::
+
+
+
+# Measures of Dependence
+
+<!-- ## Autocovariance {.smaller} -->
+
+<!-- Let $\{X_t\}_{t=1}^T$ be a sample from a univariate regularly spaced time series. Statistical inference about the time series requires understanding the joint probability distribution of the process $\{X_t\}_{t = -\infty}^{\infty}$. Knowledge about the distribution of the entire process must be gleaned from that of the observed random variables: -->
+
+<!-- $$ F(x_1, \ldots, x_T) = P(X_1 \leq x_1, \cdots, X_T \leq x_T). $$ -->
+
+<!-- Unfortunately, in almost all cases, we have only one sample point (sample path) to work with. Often, to simplify the goal, the objective is reduced to understanding the first and second-order properties of the process: -->
+
+<!-- The mean function defined as $\mu(t) = E(X_t)$ and covariance between the random variables at two time points, referred to as the autocovariance. -->
+
+<!-- $$ C(s; t) = \text{cov}(X_t,X_s), \quad s,t = 0, \pm 1, \pm 2, \ldots $$ -->
+
+
+## Autocovariance 
+
+Recall the standard correlation coefficient between two random variables $X$ and 
+$Y$
+
+```{r, echo=FALSE}
+set.seed(1234)
+X = rnorm(n = 10, mean = 20, sd = 4)
+Y = X + rnorm(n = 10, mean = 0, sd = 2)
+```
+
+
+```{r}
+plot(X, Y, pch = 19)
+cor(X, Y)
+```
+
+## Autocovariance
+
+For a time series, we can calculate the correlation between $X_t$ and $X_{t-1}$ and get the **lag-1 autocorrelation**
+
+```{r}
+length(AirPassengers)
+xt_1 = AirPassengers[1:143]
+xt   = AirPassengers[2:144]
+plot(xt_1, xt)
+cor(xt_1, xt)
+```
+
+
+## Autocovariance
+
+The autocovariance function is defined as the second moment product
+
+$$\gamma_x(s,t) = \text{cov}(x_s,x_t) = E[(x_s - \mu_s)(x_t - \mu_t)]$$
+
+When no possible confusion exists about which time series we are referring to, we will drop the subscript and write $\gamma_x(s,t)$ as $\gamma(s,t)$.
+
+## Example: Autocovariance of White Noise
+
+The white noise series $w_t$ has $E(w_t) = 0$ and 
+
+$$ 
+\gamma_w(s,t) 
+=
+\text{cov}(w_s, w_t) 
+= 
+\begin{cases}
+\sigma_w^2 & s = t \\
+0 & s \neq t
+\end{cases}
+$$
+
+## Stationary Time Series
+
+- To perform all the tasks it is helpful to understand some basic concepts and notation. 
+
+- Stationarity: A stationary time series is one whose statistical properties do not depend on the time window at which the series is observed. but rather on the width of the window.
+    -Series with patterns such as trends, or seasonal patterns are not stationary 
+
+- On the other hand, a **white noise** series is stationary 
+
+- Some cases can be confusing — a time series with cyclic behavior (but with no trend or seasonality) is stationary. This is because the cycles are not of a fixed length, and hence behavior at a given time point is not predictable.
+
+- In general, a stationary time series will have no predictable patterns in the long term. Time plots will show the series to be roughly horizontal (although some cyclic behavior is possible), with constant variance.
+
+
+<!-- ## Stationarity -->
+
+<!-- If $\{y_t\}$ is a **stationary time series**, then for all $s$, the distribution of $(y_t,\dots,y_{t+s})$ does not depend on $t$. -->
+
+<!-- A stationary series is: -->
+
+<!-- -   roughly horizontal -->
+<!-- -   constant variance -->
+<!-- -   no patterns predictable in the long term -->
+
+## Stationary or not?
+
+```{r stationary, echo=FALSE, warning=FALSE, fig.height=4.6, fig.width=10}
+p1 <- gafa_stock |>
+  filter(Symbol == "GOOG", year(Date) == 2015) |>
+  autoplot(Close) +
+  labs(subtitle = "(a) Google closing price", x = "Day", y = " $US")
+
+p2 <- gafa_stock |>
+  filter(Symbol == "GOOG", year(Date) == 2015) |>
+  autoplot(difference(Close)) +
+  labs(subtitle = "(b) Change in google price", x = "Day", y = "$US")
+
+p3 <- as_tsibble(fma::strikes) |>
+  autoplot(value) +
+  labs(subtitle = "(c) Strikes: US",
+       y = "Number of strikes",
+       x = "Year")
+
+p4 <- as_tsibble(fma::hsales) |>
+  autoplot(value) +
+  labs(subtitle = "(d) House sales: US",
+       y = "Number of houses",
+       x = "Month")
+
+p5 <- as_tsibble(fma::eggs) |>
+  autoplot(value) +
+  labs(subtitle = "(e) Egg prices: US",
+       y = "$US (constant prices)",
+       x = "Year")
+
+p6 <- aus_livestock |>
+  filter(State == "Victoria", Animal == "Pigs") |>
+  autoplot(Count) +
+  labs(subtitle = "(f) Pigs slaughtered: Victoria, Australia",
+       y = "Number of pigs",
+       x="Month")
+
+p7 <- pelt |>
+  autoplot(Lynx) +
+  labs(subtitle = "(g) Lynx trapped: Canada",
+       y = "Number of lynx",
+       x = "Year")
+
+p8 <- aus_production |>
+  filter(year(Quarter) %in% 1991:1995) |>
+  autoplot(Beer) +
+  labs(subtitle = "(h) Beer production: Australia",
+       y = "Megalitres",
+       x = "Quarter")
+
+p9 <- aus_production |>
+  autoplot(Gas) +
+  labs(subtitle = "(i) Gas production: Australia",
+       y = "Petajoules",
+       x = "Quarter")
+
+(p1 | p2 | p3) / (p4 | p5 | p6) / (p7 | p8 | p9)
+```
+
+## Stationarity
+
+-   Transformations help to stabilize the variance.
+
+-   For ARIMA modeling, we also need to stabilize the mean.
+
+## Identifying non-stationary series
+
+- Time plot
+- The ACF of non-stationary data decreases slowly.
+    - The ACF of stationary data drops to zero relatively quickly
+- For non-stationary data, the value of $\widehat{\gamma}(1)$ is often large and positive.
+- Augmented Dickey-Fuller test
+
+## ADF test
+
+```{r}
+adf.test(USpop)
+```
+
+```{r}
+adf.test(rnorm(300))
+```
+
+
+## Example: Google stock price
+
+```{r}
+google_2018 <- gafa_stock |>
+  filter(Symbol == "GOOG", year(Date) == 2018)
+google_2018 |>
+  autoplot(Close) +
+  labs(y = "Closing stock price ($USD)")
+```
+
+## ACF: Google stock price
+
+```{r}
+google_2018 |>
+  ACF(Close) |>
+  autoplot()
+```
+
+## Differenced 
+
+```{r}
+google_2018 |>
+  autoplot(difference(Close)) +
+  labs(y = "Change in Google closing stock price ($USD)")
+```
+
+## Differenced ACF
+
+```{r}
+google_2018 |>
+  ACF(difference(Close)) |>
+  autoplot()
+```
+
+## Partial Autocorrelation
+
+The **partial autocorrelation function** (PACF) of a stationary process $X_t$, denoted by $\phi_{hh}$ for $h=1,2,\ldots,$ is
+
+$$\phi_{11} = \text{corr}(X_t, X_{t+1}) = \rho(1) $$
+
+$$\phi_{hh} = \text{corr}(X_{t+h} - \hat{X}_{t+h}, X_t - \hat{X}_t), \quad h \geq 2.$$
+
+where $\hat{X}_{t+h}$ is the linear regression of $X_{t+h}$ on $X_{t+h-1}, \ldots, X_{t+1}$ and $\hat{X}_t$ is the regression of $X_t$ on $X_{t+h-1}, \ldots, X_{t+1}$. If
+
+$$\hat{X}_{t+h} = \beta_1 X_{t+h-1} + \cdots + \beta_{h-1} X_{t+1}$$
+
+$$\hat{X}_t = \eta_1 X_{t+1} + \cdots + \eta_{h-1} X_{t+h-1}$$
+
+then, because of stationarity, $\beta_j = \eta_j$ for $j = 1, \ldots, h-1$.
+
+# ARIMA Basics
+
+## ARIMA Model {.smaller}
+
+- Autoregressive Integrated Moving Average (ARIMA) models are the most popular parametric models for time series that directly model the autocorrelation structure of the time series based on different values of the parameters in the model
+
+- Usually abbreviated as ARIMA(p,d,q) 
+    - $\mathbf{p}$ stands for the order of the **autoregressive** part
+    - $\mathbf{q}$ stands for the order of **moving average** part 
+    - $\mathbf{d}$ stands for the order of integration (**differencing**)
+
+## ARIMA Model {.smaller}
+
+- Given a time series $Y_t$, the model provides a mechanistic evolution equation for $Y_t$ over time. 
+- For an ARIMA($p, d, q$) process, the quantity that is modeled as a stationary time series is the $d$th order difference of the process, i.e. $X_t = Y_t - Y_{t-1}$
+- It is assumed that the differenced process $X_t$ then follows an ARMA($p, q$) process who evolution over time is described by a mathematical equation involving the process history up to $p$ previous observations $X_{t-1}, \ldots, X_{t-p}$ and the values of driving noise sequence for the current period and up to $q$ prior time periods $w_t, \ldots, w_{t-q}$. 
+
+## ARIMA Model {.smaller}
+
+- The equation is written as 
+
+$$ X_t = \phi_1 X_{t-1} + \cdots + X+{t-p} + w_t + \theta_1 w_{t-1} + \cdots + \theta_q w_{t-q} $$ 
+
+where $\phi_1, \ldots, \phi_p, \theta_1, \ldots, \theta_q$ are some unknown parameters of the model. There is one more paramter, that is the variance of the noise process, $Var(w_t) = \sigma^2.$
+
+
+## Goals of ARIMA modeling
+
+Pretending that our sample $X_1, \ldots, X_T$ has been generated by an ARMA the following are common tasks that we need to learn to perform:
+
+-   **Model specification:** Figure out the orders $p$ and $q$ either by exploratory analysis or in a more objective analytical manner.
+
+-   **Estimation:** Given $p$ and $q$, and the sample, how to estimate the unknown parameters $\phi_1, \ldots, \phi_p, \theta_1, \ldots, \theta_q, \sigma^2$?
+
+-   **Prediction:** What are the prediction equations for an ARMA model with given parameter values if we want to predict $h$-step ahead in the future: i.e., given $X_1, \ldots, X_T$ we want to forecast $X_{T+h}$?
+
+-   **Prediction Interval:** If we apply the prediction equation at the estimated parameter values, how do we quantify the uncertainty of the forecasts?
+
+# Basic concepts of AR and MA ACF
+
+## AR(p) and MA(q)
+
+|       | ACF                   | PACF                  |
+|-------|-----------------------|-----------------------|
+| AR(p) | Decays                | cuts off after p lags |
+| MA(q) | cuts off after q lags | Decays                |
+
+## ACF of AR vs MA
+
+What do you think the difference is???
+
+```{r, eval = FALSE}
+# Simulate White noise
+x_wn = rnorm(200)
+# Simulate AR(1) with phi = .95
+x_ar = arima.sim(model = list(ar = .95), n = 200)
+# Simulate MA(1) with theta = .95
+x_ma = arima.sim(model = list(ma = .95), n = 200)
+acf(x_wn)
+acf(x_ar)
+acf(x_ma)
+```
+
+Let's run this in the R console and see...
+
+## Differencing
+
+-   Differencing helps to stabilize the mean.
+-   The differenced series is the change between each observation in the original series: $\Delta y_t = y_t - y_{t-1}$.
+-   The differenced series will have only $T-1$ values since it is not possible to calculate a difference for the first observation.
+
+## Second-order differencing
+
+Occasionally the differenced data will not appear stationary and it may be necessary to difference the data a second time:\pause
+
+$$
+\begin{align*}
+y_{t} & = y_{t} - y_{t - 1} \\
+        & = (y_t - y_{t-1}) - (y_{t-1}-y_{t-2})\\
+        & = y_t - 2y_{t-1} +y_{t-2}.
+\end{align*}
+$$
+
+-   $y_t$ will have $T-2$ values.
+-   In practice, it is almost never necessary to go beyond second-order differences.
+
+## Seasonal differencing
+
+\fontsize{14}{14}\sf
+
+A \orange{seasonal difference} is the difference between an observation and the corresponding observation from the previous year. $$
+ \Delta_m y_t = y_t - y_{t-m}
+$$ where $m=$ number of seasons.\pause
+
+-   For monthly data $m=12$.
+-   For quarterly data $m=4$.
+-   Seasonally differenced series will have \orange{$T-m$} obs.\pause
+
+## Antidiabetic drug sales
+
+```{r, echo=TRUE}
+a10 <- PBS |>
+  filter(ATC2 == "A10") |>
+  summarise(Cost = sum(Cost) / 1e6)
+```
+
+## Antidiabetic drug sales
+
+```{r, echo=TRUE}
+a10 |> autoplot(
+  Cost
+)
+```
+
+## Antidiabetic drug sales
+
+```{r, echo=TRUE}
+a10 |> autoplot(
+  log(Cost)
+)
+```
+
+## Antidiabetic drug sales
+
+```{r, echo=TRUE}
+a10 |> autoplot(
+  log(Cost) |> difference(12)
+)
+```
+
+## Corticosteroid drug sales
+
+```{r, echo=TRUE}
+h02 <- PBS |>
+  filter(ATC2 == "H02") |>
+  summarise(Cost = sum(Cost) / 1e6)
+```
+
+## Corticosteroid drug sales
+
+```{r, echo=TRUE}
+h02 |> autoplot(
+  Cost
+)
+```
+
+## Corticosteroid drug sales
+
+```{r, echo=TRUE}
+h02 |> autoplot(
+  log(Cost)
+)
+```
+
+## Corticosteroid drug sales
+
+```{r, echo=TRUE}
+h02 |> autoplot(
+  log(Cost) |> difference(12)
+)
+```
+
+## Corticosteroid drug sales
+
+```{r, echo=TRUE}
+h02 |> autoplot(
+  log(Cost) |> difference(12) |> difference(1)
+)
+```
+
+## Corticosteroid drug sales
+
+-   Seasonally differenced series is closer to being stationary.
+-   Remaining non-stationarity can be removed with further first difference.
+
+If $\Delta_{12}y_t = y_t - y_{t-12}$ denotes seasonally differenced series, then differenced seasonally differenced series is
+
+$$
+\begin{align*}
+ \Delta_{12} \Delta \,y_t &= \Delta_{12}(y_t - y_{t-1}) \\
+      &= (y_t - y_{t-12}) - (y_{t-1} - y_{t-13}) \\
+      &= y_t - y_{t-1} - y_{t-12} + y_{t-13}\ 
+\end{align*}
+$$
+
+## Seasonal differencing
+
+When both seasonal and first differences are applied
+
+-   it makes no difference which is done first---the result will be the same.
+-   If seasonality is strong, we recommend that seasonal differencing be done first because sometimes the resulting series will be stationary and there will be no need for further first difference.
+
+It is important that if differencing is used, the differences are interpretable.
+
+## Interpretation of differencing
+
+-   first differences are the change between one observation and the next;
+-   seasonal differences are the change between one year to the next.
+
+But taking lag 3 differences for yearly data, for example, results in a model which cannot be sensibly interpreted.
+
+## AR(p) models {.smaller}
+
+An **autoregressive model** is a very common model for time series. Consider a series $X_1, X_2,\ldots, X_n$. An autoregressive model of order p (denoted **AR(p)**) states that $X_t$ is a linear function of the previous p values of the series plus an error term:
+
+$$ 
+X_t = \phi_0 + \phi_1 X_{t-1} +  \phi_2 X_{t-2} + \cdots + \phi_p X_{t-p} + Z_t,
+$$
+
+where $\phi_1,\ldots,\phi_p$ are coefficients that we have to define or determine, and $Z_t$ are white noise zero mean and variance $\sigma^2$.
+
+A compact way of writing the model is
+
+$$
+\phi(B)X_t = Z_t
+$$
+
+where $$\phi(B) = I - \phi_1 B - \cdots - \phi_p B^p$$ is the autoregressive polynomial. The behavior of the process is intimately related to the roots of the polynomial.
+
+## AR(1) process: role of the parameter {.smaller}
+
+$$X_t = \phi_1 X_{t-1} + Z_t$$ Iterating the equation we get $$X_t = \phi_1^t X_0 + \sum_{j=0}^{t-1} \phi_1^j Z_{t-j}$$ If $|\phi_1| < 1$ then the first term on the RHS will go to zero and the second term will converge in mean squares to $\sum_{j=0}^{\infty} \phi_1^j Z_{t-j}$ Thus, a solution in mean square exists and is equal to $$ X_t = \sum_{j=0}^{\infty} \phi_1^j Z_{t-j}$$
+
+## Sample path changes with $\phi$: smoothness
+
+$$
+X_t = \phi X_{t-1} + W_t
+$$
+
+As $\phi$ goes from 0 to 1 the series looks smoother.
+
+We can look at this for a fixed sequence of $\{ w_t \}$.
+
+## 
+
+```{r}
+w = rnorm(300)
+x = arima.sim(model = list(ar = .2), n = 300, innov = w)
+plot(x)
+```
+
+##
+
+```{r}
+x = arima.sim(model = list(ar = .4), n = 300, innov = w)
+plot(x)
+```
+
+##
+
+```{r}
+x = arima.sim(model = list(ar = .6), n = 300, innov = w)
+plot(x)
+```
+
+##
+
+```{r}
+x = arima.sim(model = list(ar = .8), n = 300, innov = w)
+plot(x)
+```
+
+## 
+
+```{r}
+x = arima.sim(model = list(ar = .95), n = 300, innov = w)
+plot(x)
+```
+
+
+## MA(q) models {.smaller}
+
+**Definition:** A **moving average model of order** $q$, noted MA($q$), is a time series model defined as follows:
+
+$$
+X_t = \theta_0 + \theta_1 Z_{t-1} + \theta_2 Z_{t-2} + \cdots + \theta_q Z_{t-q} + Z_t
+$$
+
+As in the AR($p$) model, the model can be written in a compact form as
+
+$$
+X_t = \theta(B)Z_t
+$$
+
+where $\theta(B) = 1 + \theta_1 B + \cdots + \theta_q B^q$ is the **moving average (MA) polynomial**.
+
+## ARMA(p, q) models {.smaller}
+
+**Definition:** A time series $X_t$ arising as a solution to the mechanistic model
+
+$$
+X_t = \alpha + \phi_1 X_{t-1} + \cdots + \phi_p X_{t-p} + \theta_1 Z_{t-1} + \cdots + \theta_q Z_{t-q} + Z_t
+$$
+
+with $p$ the order of the AR part, and $q$ the order of the MA part. It is understood that the AR and the MA polynomials have no common root.
+
+The compact form of the model is
+
+$$
+\phi(B)X_t = \theta(B) Z_t
+$$
+
+where $\phi(B)$ and $\theta(B)$ are the autoregressive and moving average polynomials, respectively.
+
+## Exercise 
+
+**Exercise**: Generate 200 observations from a mean-zero ARMA(1,1) model with $\phi_1 = 0.7$, $\theta_1 = 0.3$, and $\sigma_z^2 = 0.5$. Plot the ACF up to lag 30.
+
+
+# Estimation
+
+## Gaussian Likelihood
+
+- In this we assume $\{X_t\}$ is a Gaussian time series
+  * mean zero
+  * ACVF $\gamma(h) = E[X_t X_{t+h}]$
+  
+- Let ${\bf X}_n = (X_1, \ldots, X_n)^\prime$
+- $E[{\bf X}_n {\bf X}_n^\prime] = \Gamma_n$ an $n\times n$ matrix (assume nonsingular)
+
+The likelihood of ${\bf X}_n$ is:
+
+$$
+L(\Gamma_n)
+=
+(2\pi)^{-n/2}
+(det ~\Gamma_n)^{-1/2}
+exp\left( \frac{1}{2} {\bf X}_n^\prime \Gamma_n^{-1} {\bf X}_n \right)
+$$
+
+
+## Parameter estimation 
+
+- In practice, we maximize the GL to find parameter estimates
+- Most software will return the value of the log likelihood of the data
+  * the logarithm of the probability of the observed data coming from the estimated model
+
+## Information Criteria
+
+Good models are obtained by minimising the AIC, AICc or BIC
+
+- $\text{AIC} = -2 \log(L) + 2(p + q + k + 1)$
+- $\text{AICc} = \text{AIC} + \frac{2(p + q + k + 1)(p + q + k + 2)}{T - p - q - k - 2}$
+- $\text{BIC} = \text{AIC} + \left[\log(T) - 2\right](p + q + k + 1)$
+
+#  Diagnostics
+
+## Residuals
+
+We can example the time series model residuals as a diagnostic.
+
+- Uncorrelated
+- Normally distributed
+
+
+## Residual autocorrelation
+
+- Plotting $\widehat{\rho}_w(h)$ can be a good visual test
+- We can perform a general test that take into consideration the magnitudes of the residual ACF lags as a group
+
+Ljung-Box-Pierce Q-statistic:
+$$
+Q = 
+n(n+2)
+\sum_{h=1}^{H}
+\frac{\widehat{\rho}^2_w(h)}{n-h}
+$$
+
+## LBQ stat
+
+- Under the null hypothesis of zero ACF
+$$
+Q \sim \chi^2_{H-p-q}
+$$
+- Thus we would reject the null at level $\alpha$ if the value of $Q$ exceeds the $(1-\alpha)$-quantile of the $\chi^2$ distribution. 
+
+## Example Box-Jenkins fitting method
+
+Lets fit an ARIMA model to the following data:
+
+```{r, echo=FALSE}
+set.seed(123)
+x = arima.sim(model = list(ar = c(1.5, -.75)), 
+              n = 144)
+plot(x)
+```
+
+## Is series stationary?
+
+- Visually series appears to be stationary: $d = 0$
+
+- The Augmented Dickey-Fuller Test confirms this 
+
+```{r}
+adf.test(x)
+```
+
+
+## What are candidate AR/MA orders?
+
+```{r}
+tsdisplay(x)
+```
+
+## Some candidate models to try
+
+|             | **p** | **q** |   |   |
+|-------------|-------|-------|---|---|
+| **model 1** | 1     | 0     |   |   |
+| **model 2** | 0     | 1     |   |   |
+| **model 3** | 2     | 0     |   |   |
+
+```{r}
+m1 = Arima(x, order = c(1, 0, 0))
+m2 = Arima(x, order = c(0, 0, 1))
+m3 = Arima(x, order = c(2, 0, 0))
+```
+
+## ARIMA(1, 0, 0)
+
+:::: {.columns}
+
+::: {.column width="50%"}
+```{r}
+m1
+```
+:::
+
+::: {.column width="50%"}
+```{r}
+acf(resid(m1))
+```
+:::
+
+::::
+
+## ARIMA(0, 0, 1): 
+
+:::: {.columns}
+
+::: {.column width="50%"}
+```{r}
+m2
+```
+:::
+
+::: {.column width="50%"}
+```{r}
+acf(resid(m2))
+```
+:::
+
+::::
+
+## ARIMA(2, 0, 0)
+
+:::: {.columns}
+
+::: {.column width="50%"}
+```{r}
+m3
+```
+:::
+
+::: {.column width="50%"}
+```{r}
+acf(resid(m3))
+```
+:::
+
+::::
+
+## Important note
+
+- This was simulated data from an AR(2) model!
+- Real data will NEVER be this simple and clean model
+- Some ACF lags will be hard to interpret
+- AIC/BIC values will be much closer together
+
+# SARIMA(p, d, q)(P, D, Q)
+
+## Let's try it out
+
+Recall how to download data from the FRED:
+
+```{r, echo=FALSE}
+library(fredr)
+fredr_set_key("052142bc981666b4ebcb1c8df98d006b")
+```
+
+```{r}
+library(fredr)
+# fredr_set_key("your_key_here")
+
+dat = fredr(series_id = "MSACSR") |> 
+  select(time = date, value) 
+
+ts_plot(dat)
+```
+
+## Clearly need d=1, What about AR/MA/SAR/SMA orders?
+
+:::: {.columns}
+
+::: {.column width="50%"}
+```{r}
+x = ts_ts(dat)
+acf(diff(x), lag.max = 12*5)
+```
+:::
+
+::: {.column width="50%"}
+```{r}
+pacf(diff(x), lag.max = 12*5)
+```
+:::
+
+::::
+
+## Lets try SARIMA(0, 1, 1)(0, 0, 1)
+
+```{r}
+fit = Arima(x, order = c(0, 1, 1), seasonal = c(0, 0, 1))
+acf(resid(fit))
+```
+
+## Lets try SARIMA(0, 1, 1)(0, 1, 1)
+
+Might need to add seasonal difference, $D=1$
+
+```{r}
+fit2 = Arima(x, order = c(0, 1, 1), seasonal = c(0, 1, 1))
+acf(resid(fit2))
+```
+
+Moderately better, maybe...
+
+## Lets try SARIMA(0, 1, 1)(1, 1, 0)
+
+```{r}
+fit3 = Arima(x, order = c(0, 1, 1), seasonal = c(1, 1, 0))
+acf(resid(fit3))
+```
+
+Looks worse!
+
+
+# RegARIMA
+
+## regARIMA
+
+- Consider the <ins>classical regression</ins> model with uncorrelated errors
+
+$$ y_t = \beta_0 + \beta_1 x_{1, t} + \cdots + \beta_r x_{r, t} + \epsilon_t $$
+
+- RegARIMA looks like the regression model but the error term, $x_t$ has some ACVF
+function $\gamma(h)$
+
+$$ y_t = \sum_{j=1}^{r}\beta_j z_{t, j} + x_t $$
+
+# Useful Predictor variables
+
+## Trend
+
+A linear trend can be modelled by simply using $$x_{1,t} = t$$ as a predictor,
+
+$$y_t = \beta_0 + \beta_1 t + \epsilon_t$$
+
+
+## Dummy variables
+
+- A dummy variable is also known as an “indicator variable”.
+- Example a predictor is a categorical variable taking only two values (e.g., “yes” and “no”)?
+
+    - when forecasting daily sales and you want to take account of whether the day is a public holiday or not.
+    - So the predictor takes value “yes” on a public holiday, and “no” otherwise.
+
+-  a “dummy variable” which takes value 1 corresponding to “yes” and 0 corresponding to “no”.
+
+ - A dummy variable can also be used to account for an outlier in the data.
+
+ - Rather than omit the outlier, a dummy variable removes its effect.
+
+- In this case, the dummy variable takes value 1 for that observation and 0 everywhere else.
+
+
+## Seasonal Dummy variables
+
+|          | d1, t | d2, t | d3, t | d4, t | d5, t | d6, t |
+|----------|-------|-------|-------|-------|-------|-------|
+| Monday   | 1     | 0     | 0     | 0     | 0     | 0     |
+| Tuesday  | 0     | 1     | 0     | 0     | 0     | 0     |
+| Wednesday| 0     | 0     | 1     | 0     | 0     | 0     |
+| Thursday | 0     | 0     | 0     | 1     | 0     | 0     |
+| Friday   | 0     | 0     | 0     | 0     | 1     | 0     |
+| Saturday | 0     | 0     | 0     | 0     | 0     | 1     |
+| Sunday   | 0     | 0     | 0     | 0     | 0     | 0     |
+| Monday   | 1     | 0     | 0     | 0     | 0     | 0     |
+
+## Example: Australian quarterly beer production: 
+
+```{r, echo=FALSE}
+recent_production <- aus_production |>
+  filter(year(Quarter) >= 1992)
+recent_production |>
+  autoplot(Beer) +
+  labs(y = "Megalitres",
+       title = "Australian quarterly beer production")
+```
+
+## Example: Australian quarterly beer production: 
+
+- We can model this data using a regression model with a **linear trend** and **quarterly dummy variables**,
+
+$$y_t = \beta_0 + \beta_1 t + \beta_2 d_{2,t} + \beta_3 d_{3,t} + \beta_4 d_{4,t} + \epsilon_t,$$
+
+- $d_{i,t} = 1$  if  $t$ is in quarter $i$ and 0 otherwise. 
+- The first quarter variable has been omitted, so the coefficients associated with the other quarters are measures of the difference between those quarters and the first quarter.
+
+## Example: Australian quarterly beer production: 
+
+```{r}
+fit_beer <- recent_production |>
+  model(TSLM(Beer ~ trend() + season()))
+report(fit_beer)
+```
+
+- There is an average downward trend of -0.34 megalitres per quarter. 
+- On average, the second quarter has production of 34.7 megalitres lower than the first quarter
+- the third quarter has production of 17.8 megalitres lower than the first quarter
+- the fourth quarter has production of 72.8 megalitres higher than the first quarter.
+
+## Example: Australian quarterly beer production: 
+
+- Plotting fitted values
+
+```{r}
+#| output-location: slide
+augment(fit_beer) |>
+  ggplot(aes(x = Quarter)) +
+  geom_line(aes(y = Beer, colour = "Data")) +
+  geom_line(aes(y = .fitted, colour = "Fitted")) +
+  scale_colour_manual(
+    values = c(Data = "black", Fitted = "#D55E00")
+  ) +
+  labs(y = "Megalitres",
+       title = "Australian quarterly beer production") +
+  guides(colour = guide_legend(title = "Series"))
+```
+
+## Example: Australian quarterly beer production: 
+
+- Plotting actual vs fitted values
+
+```{r}
+#| output-location: slide
+augment(fit_beer) |>
+  ggplot(aes(x = Beer, y = .fitted,
+             colour = factor(quarter(Quarter)))) +
+  geom_point() +
+  labs(y = "Fitted", x = "Actual values",
+       title = "Australian quarterly beer production") +
+  geom_abline(intercept = 0, slope = 1) +
+  guides(colour = guide_legend(title = "Quarter"))
+```
+
+
+## Intervention variables
+
+- Often necessary to model interventions that may have affected the variable to be forecast. 
+    - For example, competitor activity, advertising expenditure, industrial action
+
+
+## Trading Day 
+
+- $x_1$ = number of Mondays in month;
+- $x_2$ = number of Tuesdays in month;
+- $\vdots$
+- $x_7$ = number of Sundays in month.
+
+
+
+## Holiday 
+
+Some holidays can move around in the calendar
+
+- Easter
+- Chinese New Year
+- Ramadan
+
+Census Bureau releases software to create custom holiday regressors.
+
+```{r, eval=FALSE}
+?genhol
+```
+
+
+## Fourier series
+
+- Alternative to using seasonal dummy variables
+- Useful for long seasonal periods
+
+If  $m$  is the seasonal period, then the first few Fourier terms are given by:
+
+:::: {.columns}
+
+::: {.column width="50%"}
+- $x_{1,t} = \sin \left( \frac{2 \pi t}{m} \right)$
+- $x_{2,t} = \cos \left( \frac{2 \pi t}{m} \right)$
+- $x_{3,t} = \sin \left( \frac{4 \pi t}{m} \right)$
+:::
+
+::: {.column width="50%"}
+- $x_{4,t} = \cos \left( \frac{4 \pi t}{m} \right)$
+- $x_{5,t} = \sin \left( \frac{6 \pi t}{m} \right)$
+- $x_{6,t} = \cos \left( \frac{6 \pi t}{m} \right)$
+:::
+
+::::
+
+# Seasonal Adjustment
+
+## SA Definition
+
+- Removing those consistent, repeated seasonal patterns from a time series to be able to see underlying movements and make meaningful comparisons.
+
+- "Decompose" the time series into components
+
+- Seasonal Adjustment = Finding the Signal
+
+## What Causes Seasonality?
+
+- Natural factors
+    - Weather, amount of rainfall, temperature
+- Administrative measures
+    - Starting and ending dates of the school year, corporate policies
+- Social/cultural/religious traditions 
+    - Fixed holidays such as Christmas
+    - New car models
+
+## Why Remove Seasonal Effects?
+
+- Bell and Hillmer (1984)
+    - Seasonal patterns can obscure relationships between different time
+series or between the time series and external events
+
+- In other words, remove the seasonal patterns to reveal the relationships
+
+## Testing for Seasonality {.smaller}
+
+To help you to make a good decision, X-13 offers a few formal checks:
+
+-   The **QS test** is the primary test to evaluate seasonality both the original or in the adjusted series.
+    It will be discussed in more detail in @sec-quality-measures.
+
+-   The **Identifiable Seasonality Test (IDS)** gives a simple yes or no answer to whether a series is seasonal or not.
+    It is available for X11 adjustments only.
+
+-   The **M7 statistic** applies critical values to the Identifiable Seasonality Test (IDS) and returns a simple yes or no answer.
+
+- **F-test for seasonal regressors**
+
+Which tests are preferable, and how should a user decide if the tests are not aligned?
+Often, this will only happen with marginal cases and hence we suggest following our guiding principle and adjusting your series. 
+More often than not the tests will provide enough evidence to make help make an informed decision about whether a series is seasonal or not.
+
+## Testing for Seasonality - QS test
+
+```{r}
+qs(seas(AirPassengers)) |> head(7)
+```
+
+## Testing for Seasonality - QS test
+
+- The QS statistics check for positive autocorrelation at the seasonal lags.
+- A small p-value indicates seasonality.
+
+The QS statistic for a monthly time series is 
+
+$$
+QS = n(n+2)\left(\frac{\hat{\gamma}(12)^2}{n - 12} + \frac{\hat{\gamma}(24)^2}{n - 24}\right)
+$$ 
+
+The value QS is approximately chi-squared with 2 degrees of freedom.
+
+
+## Components
+
+$$ X_t = T_t + S_t + I_t $$
+
+- We will see how linear filters can be used to extract these features
+
+# Filtering
+
+## Linear Filter
+
+This method is useful in discovering certain traits in a time series, such as long-term trend and seasonal components.
+
+$$
+m_t = 
+\sum_{j = -k}^{k} a_j x_{t-j}
+$$
+
+## Example linear filter
+
+```{r}
+wgts = c(.5, rep(1,11), .5)/12
+soif = stats::filter(soi, sides=2, filter=wgts)
+tsplot(soi, col=4)
+lines(soif, lwd=2, col=6)
+par(fig = c(.75, 1, .75, 1), new = TRUE) # the insert
+nwgts = c(rep(0,20), wgts, rep(0,20))
+plot(nwgts, type="l", ylim = c(-.02,.1), xaxt='n', yaxt='n', ann=FALSE)
+```
+
+## Henerson Trend filters 
+
+- Henderson moving averages are filters which were derived by Robert Henderson in 1916 for use in actuarial applications.
+- They are trend filters, commonly used in time series analysis to smooth seasonally adjusted estimates in order to generate a trend estimate. 
+- They are used in preference to simpler moving averages because they can reproduce polynomials of up to degree 3, thereby capturing trend turning points.
+
+```{r}
+term_5 <- c(-0.073, 0.294, 0.558, 0.294, -0.073)
+term_7 <- c(-0.059, 0.059, 0.294, 0.412, 0.294, 0.059, -0.059)
+term_9 <- c(-0.041, -0.010, 0.119, 0.267, 0.330, 0.267, 0.119, -0.010, -0.041)
+term_13 <- c(-0.019, -0.028, 0.0, 0.066, 0.147, 0.214, 0.240, 0.214, 0.147, 0.066, 0.0, -0.028, -0.019)
+term_23 <- c(-0.004, -0.011, -0.016, -0.015, -0.005, 0.013, 0.039, 0.068, 0.097, 0.122, 0.138, 0.148, 0.138, 0.122, 0.097, 0.068, 0.039, 0.013, -0.005, -0.015, -0.016, -0.011, -0.004)
+```
+
+## Henderson Trend filters
+
+```{r, echo=FALSE}
+hend = data.frame(time = -11:11,
+                  hend_5 = rep(NA, 23),
+                  hend_7 = rep(NA, 23),
+                  hend_9 = rep(NA, 23),
+                  hend_13 = rep(NA, 23),
+                  hend_23 = term_23)
+hend$hend_5[match(-2:2, -11:11)] <- term_5
+hend$hend_7[match(-3:3, -11:11)] <- term_7
+hend$hend_9[match(-4:4, -11:11)] <- term_9
+hend$hend_13[match(-6:6, -11:11)] <- term_13
+hend |>
+  gather("hend_filter", "weight", -time) |>
+  ggplot(aes(x = time, y = weight, col = hend_filter)) +
+  geom_line()
+```
+
+## Example trend with 13 term Henderson
+
+```{r}
+x = diff(diff(AirPassengers), 12)
+xf = stats::filter(x, term_13)
+ts_plot(x, xf)
+```
+
+
+## Seasonal Filters
+
+```{r, echo=FALSE}
+# Function to find seasonal filter weight by passing impuse through
+find_seasonal_PxQ_filter_wts <- function(P, Q) {
+  v <- rep(0, 100)
+  v[50] <- 1
+  v2 <- stats::filter(v, rep(1 / Q, Q), sides = 2)
+  v3 <- stats::filter(v2, rep(1 / P, P), sides = 2)
+  wts <- v3[v3 > 0 & !is.na(v3)]
+  wts
+}
+```
+
+```{r, echo=FALSE}
+# 3 x 3 seasonal filter wts
+w <- find_seasonal_PxQ_filter_wts(3, 3)
+w_len <- (length(w) - 1) / 2
+plot((-w_len):(w_len), w, type = "b", ylim = c(0, max(w)), xlab = "time lag", ylab = "filter weight", main = "3x3 Seasonal Filter wts")
+abline(h = 0, lty = 'dotted')
+```
+
+##
+
+```{r, echo=FALSE}
+# 3 x 5 seasonal filter wts
+w <- find_seasonal_PxQ_filter_wts(3, 5)
+w_len <- (length(w) - 1) / 2
+plot((-w_len):(w_len), w, type = "b", ylim = c(0, max(w)), xlab = "time lag", ylab = "filter weight", main = "3x5 Seasonal Filter wts")
+abline(h = 0, lty = 'dotted')
+```
+
+##
+
+```{r, echo=FALSE}
+# 3 x 9 seasonal filter wts
+w <- find_seasonal_PxQ_filter_wts(3, 9)
+w_len <- (length(w) - 1) / 2
+plot((-w_len):(w_len), w, type = "b", ylim = c(0, max(w)), xlab = "time lag", ylab = "filter weight", main = "3x9 Seasonal Filter wts")
+abline(h = 0, lty = 'dotted')
+```
+
+##
+
+```{r, echo=FALSE}
+# 3 x 15 seasonal filter wts
+w <- find_seasonal_PxQ_filter_wts(3, 15)
+w_len <- (length(w) - 1) / 2
+plot((-w_len):(w_len), w, type = "b", ylim = c(0, max(w)), xlab = "time lag", ylab = "filter weight", main = "3x15 Seasonal Filter wts")
+abline(h = 0, lty = 'dotted')
+```
+
+## Extract Seasonal with 3x5 MA filter
+
+```{r, echo=FALSE}
+flen = 6*12 + 1
+s3x5 = rep(0, flen)
+s3x5[seq(1, flen, 12)] = find_seasonal_PxQ_filter_wts(3, 5)
+```
+
+```{r}
+x = AirPassengers - ts_trend(AirPassengers)
+xs = stats::filter(x, s3x5)
+ts_plot(ts_c(x, xs))
+```
+
+## Seasonal Adjustment Flowchart
+
+![](flowchart.png)
+
+# References for further exploration
+
+- [Census X-13ARIMA-SEATS website](https://www.census.gov/data/software/x13as.html)
+    - Download the main [reference manual](https://www2.census.gov/software/x-13arima-seats/x13as/unix-linux/documentation/docx13ashtml.pdf) 
+
+- [Seasonal Package](http://www.seasonal.website/seasonal.html)
+
+- Connect these two with a work in progress textbook: [Seasonal Adjustment in R](https://christophsax.github.io/seasonalbook.content/)
+
+
+# Reprex
+
+## Using R `reprex` package to discuss problems
+
+[https://reprex.tidyverse.org]()
+
+1.  Lets say you copy this code onto your clipboard
+
+```{r, eval=FALSE}
+(y <- 1:4)
+mean(y)
+```
+
+1.  Then run `reprex()`
+2.  A nicely rendered HTML preview will display in RStudios Viewer
+3.  AND copied to your clipboard to be pasted on Github
+

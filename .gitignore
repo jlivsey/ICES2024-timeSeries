@@ -1,5 +1,5 @@
 
-slides/00_intro/00_intro_files/*
-slides/01_decomp/01_decomp_files/*
-
 *.html
+/local-only
+*.DS_Store
+/slides/part1/ices2024-timeSeries_files
